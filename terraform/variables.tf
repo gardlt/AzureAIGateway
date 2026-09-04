@@ -66,7 +66,7 @@ variable "mcp_base_path" {
 variable "interactive_client_redirect_uris" {
   description = "Loopback/custom-scheme redirect URIs for the interactive (Claude/VS Code) public client (doc 3 §3.2). VS Code typically needs http://127.0.0.1:<port>/; add Claude's documented callback too."
   type        = list(string)
-  default     = ["http://127.0.0.1:33418/"]
+  default     = ["http://127.0.0.1:33418/", "https://vscode.dev/redirect"]
 }
 
 # ---- MCP server container app (doc 2) ----
