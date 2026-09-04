@@ -104,12 +104,20 @@ resource "azurerm_api_management_api_operation_policy" "oauth_authorize" {
     <return-response>
       <set-status code="302" reason="Found" />
       <set-header name="Location" exists-action="override">
-        <value>@("{{entra-authorize-endpoint}}" + context.Request.OriginalUrl.QueryString)</value>
+        <value>@{
+          var qs = context.Request.OriginalUrl.QueryString;
+          var extra = qs.Contains("scope=") ? "" : "&scope=" + System.Net.WebUtility.UrlEncode("{{resource-app-id}}/.default offline_access openid profile");
+          return "{{entra-authorize-endpoint}}" + qs + extra;
+        }</value>
       </set-header>
     </return-response>
   </inbound>
 </policies>
 XML
+
+  depends_on = [
+    azurerm_api_management_named_value.resource_app_id,
+  ]
 }
 
 resource "azurerm_api_management_api_operation" "oauth_token" {
@@ -134,6 +142,15 @@ resource "azurerm_api_management_api_operation_policy" "oauth_token" {
     <base />
     <set-backend-service base-url="https://login.microsoftonline.com" />
     <rewrite-uri template="/${data.azurerm_client_config.current.tenant_id}/oauth2/v2.0/token" />
+    <set-body>@{
+      var body = context.Request.Body.As<string>(preserveContent: true);
+      if (body == null || !body.Contains("scope="))
+      {
+        var sep = string.IsNullOrEmpty(body) ? "" : "&";
+        body = body + sep + "scope=" + System.Net.WebUtility.UrlEncode("{{resource-app-id}}/.default offline_access openid profile");
+      }
+      return body;
+    }</set-body>
   </inbound>
   <backend>
     <base />
@@ -143,4 +160,8 @@ resource "azurerm_api_management_api_operation_policy" "oauth_token" {
   </outbound>
 </policies>
 XML
+
+  depends_on = [
+    azurerm_api_management_named_value.resource_app_id,
+  ]
 }
