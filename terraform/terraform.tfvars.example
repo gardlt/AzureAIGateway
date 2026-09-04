@@ -1,0 +1,29 @@
+apim_name             = "apim-ai-gateway-contoso"
+apim_publisher_name   = "Contoso Platform Team"
+apim_publisher_email  = "platform-team@contoso.com"
+apim_sku_name         = "BasicV2_1"
+
+apim_monthly_budget_usd = 100
+apim_budget_alert_emails = ["platform-team@contoso.com"]
+
+resource_group_name = "rg-ai-gateway"
+location            = "centralus"
+environment         = "dev"
+
+# Must resolve to https://<apim_name>.azure-api.net/<mcp_base_path>/mcp
+mcp_url       = "https://apim-ai-gateway-contoso.azure-api.net/mcp-server/mcp"
+mcp_base_path = "mcp-server"
+
+mcp_container_image = "myregistry.azurecr.io/mcp-server:latest"
+
+interactive_client_redirect_uris = [
+  "http://127.0.0.1:33418/",
+]
+
+enable_llm_gateway     = true
+openai_deployment_name = "gpt-4o"
+openai_model_name      = "gpt-4o"
+openai_model_version   = "2024-08-06"
+
+enable_a2a_gateway    = false
+a2a_agent_runtime_url = ""

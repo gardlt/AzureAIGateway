@@ -1,0 +1,16 @@
+# Local plugin cache / provider binaries. Lock file IS committed (pins provider versions).
+.terraform/
+
+# State — contains resource IDs and outputs, some sensitive. Use a remote
+# backend (azurerm storage) for the home lab instead of committing this.
+*.tfstate
+*.tfstate.*
+
+# Real values — apim_publisher_email, secrets, etc. Only *.tfvars.example ships.
+*.tfvars
+!terraform.tfvars.example
+
+# Saved plans, apply logs — local scratch, not source.
+*.tfplan
+crash.log
+apply.log
