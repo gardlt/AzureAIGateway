@@ -92,7 +92,7 @@ Portal steps, on the APIM instance from doc 1:
 2. Left menu, under **APIs**, select **MCP servers** > **+ Create MCP server**.
 3. Select **Expose an existing MCP server**.
 4. **Backend MCP server**:
-   - **MCP server base URL**: `https://<MCP_URL>/mcp` (from step 2.1).
+   - **MCP server base URL**: bare container app origin only, e.g. `https://<container-app-fqdn>` — **do not** include `/mcp` here. The MCP server operation you create in this step already appends `/mcp` as its `url_template`; including it in the base URL too doubles it into `.../mcp/mcp` on the backend request and the Go/SDK server 404s.
    - **Transport type**: Streamable HTTP (default).
 5. **New MCP server**:
    - **Name**: e.g. `mcp-server`.
@@ -167,13 +167,15 @@ Both the interactive and service-to-service patterns end up presenting a bearer 
             <application-id>{{agent-client-id}}</application-id>
         </client-application-ids>
         <audiences>
-            <audience>{{mcp-url}}</audience>
+            <audience>{{resource-app-id}}</audience>
         </audiences>
     </validate-azure-ad-token>
 </inbound>
 ```
 
-Add `interactive-client-id` and `agent-client-id` Named Values set to `$INTERACTIVE_CLIENT_ID` and `$AGENT_CLIENT_ID` from doc 3. Optionally branch on the token's claims to restrict tools by caller type — a delegated (interactive) token has an `scp` claim containing `mcp.tools.invoke`; a service-to-service token has a `roles` claim containing `Tools.Invoke.All`:
+> **Audience gotcha, confirmed by live testing:** Entra v2 access tokens always set `aud` to the **resource app's `client_id` (GUID)** — never the Application ID URI from `identifier_uris` (`$MCP_URL`) — regardless of whether the token was requested with `scope=$MCP_URL/.default` or `scope=$APP_ID/.default`. Add a `resource-app-id` Named Value set to `$APP_ID` (the GUID from doc 3 §3.1) and check the audience against that, not `{{mcp-url}}`. Using `{{mcp-url}}` here means every token validation fails with `401` regardless of a valid token.
+
+Add `interactive-client-id`, `agent-client-id`, and `resource-app-id` Named Values set to `$INTERACTIVE_CLIENT_ID`, `$AGENT_CLIENT_ID`, and `$APP_ID` from doc 3. Optionally branch on the token's claims to restrict tools by caller type — a delegated (interactive) token has an `scp` claim containing `mcp.tools.invoke`; a service-to-service token has a `roles` claim containing `Tools.Invoke.All`:
 
 ```xml
 <choose>
@@ -209,11 +211,16 @@ Authorization headers are forwarded to the backend by default. If you added defe
     "servers": {
         "mcp-server": {
             "type": "http",
-            "url": "https://<apim-service-name>.azure-api.net/<base-path>/mcp"
+            "url": "https://<apim-service-name>.azure-api.net/<base-path>/mcp",
+            "oauth": {
+                "clientId": "<INTERACTIVE_CLIENT_ID>"
+            }
         }
     }
 }
 ```
+
+> **Confirmed in practice:** Entra ID doesn't support RFC 7591 dynamic client registration, so VS Code cannot auto-register itself. On first use it shows *"The authorization server ... does not support automatic client registration. Do you want to proceed by manually providing a client registration (client ID)?"* and lists the redirect URIs it needs registered (typically `http://127.0.0.1:33418/` and `https://vscode.dev/redirect`). Pre-empt the prompt by setting `oauth.clientId` to `$INTERACTIVE_CLIENT_ID` in `mcp.json` as shown above, and make sure both redirect URIs are registered on the `mcp-client-interactive` app (doc 3 §3.2).
 
 In GitHub Copilot Chat, switch to **Agent** mode, open **Tools**, select tools from your server, and prompt the agent to invoke one — on first use, a browser window opens to Entra ID sign-in. Subsequent calls reuse the cached token silently.
 
@@ -246,6 +253,20 @@ npx @modelcontextprotocol/inspector
 
 Open the printed local URL, set transport to Streamable HTTP, set the URL to `$MCP_URL`, and either let Inspector drive the OAuth redirect or paste in a token acquired via doc 3 §3.4. Pin MCP Inspector to **v0.9.0** — later/earlier versions have known compatibility issues with APIM-managed MCP servers.
 
+## 2.8 Entra ID / RFC 8414 metadata gap — VS Code workaround
+
+Entra ID does **not** serve [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) authorization-server metadata (`.well-known/oauth-authorization-server` 404s); it only serves the OIDC-flavored `.well-known/openid-configuration`. VS Code's MCP OAuth client, observed live, fails AS metadata discovery against the PRM's `authorization_servers` entry because of this gap and falls back to guessing conventional `/authorize` and `/token` paths **directly on the MCP resource's own origin** (your APIM gateway), which has no such routes — the browser lands on `{"statusCode": 404, "message": "Resource not found"}`.
+
+Fix by adding a small anonymous "OAuth facade" API mounted at the APIM service root (`path = ""`) that intercepts those guessed paths and proxies them to the real Entra endpoints:
+
+- `GET /.well-known/oauth-authorization-server` → returns Entra's real `issuer`/`authorization_endpoint`/`token_endpoint` as JSON (satisfies clients that do find this URL but expect RFC 8414 shape).
+- `GET /authorize` → `302` redirect to `https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/authorize`, forwarding the original query string.
+- `POST /token` → reverse-proxy to `https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/token`, forwarding the POST body.
+
+> **Second gotcha, confirmed by live testing:** VS Code's manual-client-registration flow (the prompt in §2.7) omits the `scope` parameter entirely from both the `/authorize` request and the `/token` POST body. Entra's v2.0 token endpoint rejects a scope-less request with `AADSTS900144: The request body must contain the following parameter: 'scope'`. The facade's `/authorize` and `/token` operations should inject a default scope (`$APP_ID/.default offline_access openid profile`) whenever the incoming request doesn't already include one — do this with a `<set-header>`/`<set-body>` policy expression rather than assuming the client will supply it.
+
+This facade is optional — only needed if your MCP client falls back to resource-origin `/authorize`/`/token` guessing the way VS Code does. Claude and other clients that complete proper PRM + OIDC discovery don't need it.
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |
@@ -255,6 +276,10 @@ Open the printed local URL, set transport to Streamable HTTP, set the URL to `$M
 | `401 Unauthorized` from APIM even with a valid-looking token | Audience or client-application-id mismatch in `validate-azure-ad-token` | Confirm `{{mcp-url}}` and the `client-application-ids` Named Values in §2.6 match the actual token's `aud` and `appid`/`azp` claims |
 | Interactive sign-in works but agent client-credentials calls get `401` | Agent client wasn't granted the app role, or admin consent wasn't completed | Redo doc 3 §3.3 steps 1–2; check the token's `roles` claim contains `Tools.Invoke.All` |
 | MCP server streaming fails when diagnostic logs are enabled | Response body logging/access interferes with MCP transport | Set **Number of payload bytes to log** to 0 for Frontend Response at the All-APIs scope, or configure logging per-API instead |
+| Valid-looking token still gets `401` from `validate-azure-ad-token` | `<audience>` checked against `$MCP_URL` instead of the token's real `aud` claim | Entra always sets `aud` to the resource app's `client_id` GUID, never the Application ID URI — check against `$APP_ID`, see §2.6 |
+| MCP call with a valid token returns `404` from the server itself (not APIM's 404 body) | Backend `service_url` already ends in `/mcp` and the operation's `url_template` is also `/mcp`, doubling the path | Strip `/mcp` from the backend base URL — see §2.4 |
+| VS Code hits `<apim-url>/authorize` directly and gets `{"statusCode":404,"message":"Resource not found"}` | Entra doesn't serve RFC 8414 metadata; VS Code falls back to guessing `/authorize`/`/token` on the MCP resource's own origin | Deploy the OAuth facade in §2.8 |
+| Browser sign-in reaches Entra but fails with `AADSTS900144: The request body must contain the following parameter: 'scope'` | VS Code's manual-client-registration flow omits `scope` from the `/authorize` and `/token` requests | Inject a default scope in the facade from §2.8, or in the client's own `mcp.json` if the client supports specifying one |
 
 ## Next
 

@@ -16,7 +16,7 @@ This sets up an Azure API Management (APIM) instance as the front door for MCP t
 
 ```bash
 RESOURCE_GROUP="rg-ai-gateway"
-LOCATION="eastus"
+LOCATION="centralus" # standing default for this project — keep every resource in this doc set in Central US
 
 az group create --name $RESOURCE_GROUP --location $LOCATION
 ```

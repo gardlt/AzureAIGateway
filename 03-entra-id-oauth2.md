@@ -120,7 +120,7 @@ Portal steps (App registrations > New registration):
 1. **Name**: `mcp-client-interactive`.
 2. **Supported account types**: Accounts in this organizational directory only (or multitenant if your users span tenants).
 3. **Redirect URI**: select **Public client/native (mobile & desktop)** and add the loopback/custom-scheme redirect URI your specific MCP client uses for its OAuth callback. This differs by client and client version:
-   - VS Code (GitHub Copilot agent mode / `MCP: Add Server`) — check the redirect URI shown when you add an HTTP MCP server and it initiates auth; VS Code typically uses a `vscode://` or `http://127.0.0.1:<port>/` loopback callback.
+   - VS Code (GitHub Copilot agent mode / `MCP: Add Server`) — confirmed live: VS Code's manual-client-registration prompt (see doc 2 §2.7) requires **both** `http://127.0.0.1:33418/` and `https://vscode.dev/redirect` registered, even for the desktop app — it won't proceed with only one.
    - Claude (Desktop or claude.ai remote MCP connectors) — check Claude's MCP OAuth documentation for the exact callback URI its current version expects.
 
    Add every redirect URI you need to support as separate entries; you can register more than one client app if the clients need materially different configuration.
@@ -133,15 +133,15 @@ Portal steps (App registrations > New registration):
 INTERACTIVE_CLIENT_ID=$(az ad app create \
   --display-name "mcp-client-interactive" \
   --sign-in-audience AzureADMyOrg \
-  --public-client-redirect-uris "http://127.0.0.1:33418/" \
+  --public-client-redirect-uris "http://127.0.0.1:33418/" "https://vscode.dev/redirect" \
   --query appId -o tsv)
 
 az ad sp create --id $INTERACTIVE_CLIENT_ID
 ```
 
-(Redo the redirect URI with the value your MCP client actually uses; the permission grant in steps 6–7 above is easiest done in the portal since it requires picking the scope by name.)
+(Redo the redirect URIs with the values your MCP client actually uses; the permission grant in steps 6–7 above is easiest done in the portal since it requires picking the scope by name.)
 
-You will **not** put this client ID into APIM config or the MCP server — it's consumed entirely on the client side (Claude/VS Code configuration), which discovers it via the PRM/authorization-server metadata flow documented in doc 2 §2.5–2.6.
+You will **not** put this client ID into APIM config or the MCP server — it's consumed entirely on the client side (Claude/VS Code configuration). Ideally the client discovers it via PRM/authorization-server metadata (doc 2 §2.5–2.6), but since Entra ID doesn't support dynamic client registration, VS Code will instead prompt you to supply `$INTERACTIVE_CLIENT_ID` manually — set it as `oauth.clientId` in `mcp.json` (doc 2 §2.7) to skip that prompt.
 
 ## 3.3 Register the agent (service-to-service) client app
 
@@ -199,6 +199,8 @@ az account get-access-token --resource $MCP_URL --query accessToken -o tsv
 - Admin consent (§3.2 step 7, §3.3 step 2) is required once per tenant; propagation can take a few minutes.
 - Keep the delegated scope and the app role distinct in purpose: don't grant the interactive client app-role permissions, and don't grant the agent client the delegated scope — each pattern should only be able to acquire the token type it needs.
 - If `AADSTS9010010` appears: check for a trailing-slash or casing mismatch between the Application ID URI (§3.1) and the `resource`/`MCP_URL` value used everywhere else — it must match character for character.
+- If `AADSTS900144: The request body must contain the following parameter: 'scope'` appears during an interactive sign-in: the client's `/authorize` or `/token` request omitted `scope` — confirmed with VS Code's manual-client-registration flow (doc 2 §2.7). See the facade workaround in doc 2 §2.8, which injects a default scope when the client doesn't supply one.
+- Regardless of which `resource`/`scope` value a client requests (`$MCP_URL/.default` or `$APP_ID/.default`), the resulting token's `aud` claim is always `$APP_ID` (the GUID) — confirmed by direct token inspection. Anything validating the audience downstream (doc 2 §2.6) must check against `$APP_ID`, not `$MCP_URL`.
 
 ## Next
 
