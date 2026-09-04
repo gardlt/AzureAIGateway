@@ -82,7 +82,10 @@ resource "azurerm_container_app" "mcp_server" {
 }
 
 locals {
-  mcp_backend_url = "https://${azurerm_container_app.mcp_server.ingress[0].fqdn}/mcp"
+  # Bare origin only — the mcp_invoke operation's url_template ("/mcp")
+  # is appended by APIM to this service_url, so including /mcp here would
+  # double it up into .../mcp/mcp on the backend request.
+  mcp_backend_url = "https://${azurerm_container_app.mcp_server.ingress[0].fqdn}"
   apim_public_ip  = try(azurerm_api_management.gateway.public_ip_addresses[0], null)
 }
 
@@ -157,6 +160,18 @@ resource "azurerm_api_management_named_value" "agent_client_id" {
   value               = azuread_application.mcp_client_agent.client_id
 }
 
+# Entra v2 access tokens always set aud to the resource app's client_id
+# (GUID), never the App ID URI in identifier_uris — regardless of the
+# resource requested at the token endpoint. validate-azure-ad-token must
+# check against that GUID, not mcp-url.
+resource "azurerm_api_management_named_value" "resource_app_id" {
+  name                = "resource-app-id"
+  resource_group_name = azurerm_resource_group.gateway.name
+  api_management_name = azurerm_api_management.gateway.name
+  display_name        = "resource-app-id"
+  value               = azuread_application.mcp_server.client_id
+}
+
 # ---- 2.6 API-level policy: validate-azure-ad-token on everything except PRM ----
 
 resource "azurerm_api_management_api_policy" "mcp_server" {
@@ -174,7 +189,7 @@ resource "azurerm_api_management_api_policy" "mcp_server" {
         <application-id>{{agent-client-id}}</application-id>
       </client-application-ids>
       <audiences>
-        <audience>{{mcp-url}}</audience>
+        <audience>{{resource-app-id}}</audience>
       </audiences>
     </validate-azure-ad-token>
   </inbound>
@@ -202,6 +217,7 @@ XML
     azurerm_api_management_named_value.tenant_id,
     azurerm_api_management_named_value.interactive_client_id,
     azurerm_api_management_named_value.agent_client_id,
+    azurerm_api_management_named_value.resource_app_id,
   ]
 }
 
