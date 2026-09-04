@@ -2,7 +2,10 @@
     "servers": {
         "mcp-server": {
             "type": "http",
-            "url": "https://apim-example.azure-api.net/mcp-server/mcp"
+            "url": "https://apim-example.azure-api.net/mcp-server/mcp",
+            "oauth": {
+                "clientId": "5e287dc2-5bce-4c62-bcb3-2d624344fd02"
+            }
         }
     }
 }
