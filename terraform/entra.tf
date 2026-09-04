@@ -98,12 +98,19 @@ resource "azuread_service_principal" "mcp_client_agent" {
   client_id = azuread_application.mcp_client_agent.client_id
 }
 
+# Computed once at creation and frozen in state — using timestamp() directly
+# in end_date would recompute (and force a destroy/recreate of the secret)
+# on every plan.
+resource "time_offset" "agent_secret_expiry" {
+  offset_days = 365
+}
+
 resource "azuread_application_password" "mcp_client_agent" {
   application_id = azuread_application.mcp_client_agent.id
   display_name   = "terraform-managed"
-  # Rotate before expiry, or replace with a federated identity credential /
-  # managed identity for production agent callers (doc 3 security notes).
-  end_date = timeadd(timestamp(), "8760h") # 1 year
+  # Rotate by tainting this resource, or replace with a federated identity
+  # credential / managed identity for production agent callers (doc 3).
+  end_date = time_offset.agent_secret_expiry.rfc3339
 }
 
 # Admin consent for the app role (doc 3 §3.3 step 2).

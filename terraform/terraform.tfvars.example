@@ -14,7 +14,7 @@ environment         = "dev"
 mcp_url       = "https://apim-ai-gateway-contoso.azure-api.net/mcp-server/mcp"
 mcp_base_path = "mcp-server"
 
-mcp_container_image = "myregistry.azurecr.io/mcp-server:latest"
+mcp_container_image = "acr<apim_name-no-dashes>.azurecr.io/mcp-server:latest" # build with `az acr build`, see ../mcp-server/README.md
 
 interactive_client_redirect_uris = [
   "http://127.0.0.1:33418/",

@@ -14,3 +14,4 @@
 *.tfplan
 crash.log
 apply.log
+apply-full*.log

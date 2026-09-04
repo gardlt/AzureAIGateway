@@ -18,6 +18,15 @@ resource "azurerm_container_app" "mcp_server" {
   revision_mode                = "Single"
   tags                         = var.tags
 
+  identity {
+    type = "SystemAssigned"
+  }
+
+  registry {
+    server   = azurerm_container_registry.gateway.login_server
+    identity = "System"
+  }
+
   template {
     min_replicas = 1
 
@@ -26,6 +35,12 @@ resource "azurerm_container_app" "mcp_server" {
       image  = var.mcp_container_image
       cpu    = 0.5
       memory = "1Gi"
+
+      liveness_probe {
+        transport = "HTTP"
+        path      = "/healthz"
+        port      = var.mcp_target_port
+      }
     }
   }
 
@@ -174,7 +189,7 @@ resource "azurerm_api_management_api_policy" "mcp_server" {
     <choose>
       <when condition="@(context.Response.StatusCode == 401)">
         <set-header name="WWW-Authenticate" exists-action="override">
-          <value>@("Bearer resource_metadata=\"" + (string)context.Variables["mcp-url"] + "/.well-known/oauth-protected-resource\"")</value>
+          <value>Bearer resource_metadata="{{mcp-url}}/.well-known/oauth-protected-resource"</value>
         </set-header>
       </when>
     </choose>

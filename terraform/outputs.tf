@@ -20,6 +20,11 @@ output "mcp_container_app_fqdn" {
   value = azurerm_container_app.mcp_server.ingress[0].fqdn
 }
 
+output "acr_login_server" {
+  description = "Build/push with: az acr build --registry <this> --image mcp-server:latest ../mcp-server"
+  value       = azurerm_container_registry.gateway.login_server
+}
+
 output "tenant_id" {
   value = data.azurerm_client_config.current.tenant_id
 }
