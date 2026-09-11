@@ -86,6 +86,7 @@ Entra ID app registrations must exist before you can finish wiring APIM to the M
 5. [05-llm-gateway-budgets-rate-limits.md](05-llm-gateway-budgets-rate-limits.md) — optional, independent of steps 2–4: expose an LLM model through the same APIM instance from step 1, with per-consumer token budgets, rate limits, and observability.
 6. [06-agent-gateway-capabilities.md](06-agent-gateway-capabilities.md) — optional: capability inventory for agent traffic specifically, plus importing and securing an Agent2Agent (A2A) API through the same instance. Covers what's first-class (MCP, A2A) vs. not (ACP, ANP, others) as of this writing.
 7. [07-agent-identities.md](07-agent-identities.md) — optional, hardening pass on step 2's `mcp-client-agent`: replaces the plain app registration with a Microsoft Entra Agent ID blueprint + instance, per Microsoft's best-practice pattern.
+8. [08-self-hosted-agent-identities.md](08-self-hosted-agent-identities.md) — optional, alternative to step 7 for teams not using Foundry Agent Service: same no-secret Entra Agent ID pattern, federated to a self-hosted agent's own platform identity on Azure Container Apps or AKS.
 
 Each doc calls out the cross-references explicitly so you can also jump straight to whichever layer you're working on.
 

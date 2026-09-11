@@ -38,6 +38,68 @@ Built and tested live on this stack, not only designed on paper: a Foundry-manag
 2. The ARM and data-plane REST surfaces for the same Foundry connection resource don't share a schema — a well-intentioned ARM edit can silently retype a connection (observed firsthand: a connection flipped from `RemoteTool`/`AgenticIdentityToken` to `CustomKeys`/`AAD` on an ARM PUT that "succeeded"). Documented as a hard rule: diff the data-plane view before/after any ARM edit to one of these connections.
 3. An unrelated infra gap (container image missing from ACR after a region move) was hit and fixed along the way — not an Agent ID issue, noted for completeness.
 
+## Sequence
+
+```mermaid
+sequenceDiagram
+    actor Client as Client calling the agent
+    participant Foundry as Foundry control plane
+    participant Agent as Agent identity\n(blueprint + instance, no secret)
+    participant Entra as Microsoft Entra ID
+    participant Gw as AI Gateway (APIM)
+    participant MCP as MCP server (Container Apps)
+
+    rect rgb(235, 245, 255)
+    note over Client,Foundry: Inbound — governance & tracing only
+    Client->>Foundry: Call agent via Foundry proxy URL
+    Foundry->>Agent: Forward (no auth logic, just governance)
+    end
+
+    rect rgb(255, 245, 235)
+    note over Agent,MCP: Outbound tool call — bypasses Foundry entirely
+    Agent->>Entra: Request agentic-identity token\n(instance identity, no client secret)
+    Entra-->>Agent: Access token (audience: mcp-server,\nclient_id: agent's own instance identity)
+    Agent->>Gw: Call MCP tool, Authorization: Bearer <token>
+    Gw->>Gw: validate-azure-ad-token\n(audience + per-agent client-id allowlist)
+    Gw->>MCP: Forward (IP-restricted ingress)
+    MCP-->>Agent: Tool result
+    end
+
+    Agent-->>Foundry: Agent response
+    Foundry-->>Client: Agent response
+```
+
+## System landscape
+
+```mermaid
+flowchart TB
+    Client["Client calling the agent"]
+
+    subgraph FoundryProj["Foundry project (hermes-agent)"]
+        FoundryCP["Foundry control plane\n(inbound governance + tracing only)"]
+        Blueprint["Agent identity blueprint\nManagedAgentIdentityBlueprint"]
+        Instance["Agent instance identity\n(1:1 per agent, no client secret)"]
+        Runner["Self-hosted runner\n(alt path — mcp-client-agent + secret,\nAuth SDK sidecar removes this)"]
+        Blueprint --> Instance
+    end
+
+    Entra["Microsoft Entra ID\napp role: Tools.Invoke.All\ngranted to instance identity SP"]
+
+    subgraph GW["AI Gateway — Azure API Management"]
+        Policy["validate-azure-ad-token\naudience + foundry_agent_client_ids\nallowlist (Terraform)"]
+    end
+
+    MCP["MCP server\n(Azure Container Apps,\nIP-restricted ingress)"]
+
+    Client --> FoundryCP
+    FoundryCP -. "governance/tracing only,\nnever the tool call" .-> Instance
+    Instance -- "agentic-identity token\n(no secret)" --> Entra
+    Runner -- "client_credentials\n(shared secret)" --> Entra
+    Entra --> GW
+    GW --> Policy
+    Policy --> MCP
+```
+
 ## Why this over the alternatives
 
 | Option | Why not chosen |

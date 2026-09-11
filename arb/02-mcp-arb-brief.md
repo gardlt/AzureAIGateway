@@ -23,6 +23,69 @@ The MCP server holds the actual tool implementations. Whoever can reach it direc
 
 Both tokens are checked by the same `validate-azure-ad-token` APIM policy — one audience, one client-ID allowlist — regardless of which flow produced the token.
 
+## Sequence
+
+```mermaid
+sequenceDiagram
+    actor Human as Person (Claude / VS Code)
+    participant Gw as AI Gateway (APIM)
+    participant Entra as Microsoft Entra ID
+    participant MCP as MCP server (Container Apps)
+    participant Agent as Automated agent
+
+    rect rgb(235, 245, 255)
+    note over Human,MCP: Interactive — Authorization Code + PKCE
+    Human->>Gw: Call MCP, no token
+    Gw-->>Human: 401 + WWW-Authenticate (PRM URL)
+    Human->>Gw: GET /.well-known/oauth-protected-resource
+    Gw-->>Human: PRM doc (authorization_servers: Entra ID)
+    Human->>Entra: Browser redirect /authorize (PKCE)
+    Entra-->>Human: Sign-in, then auth code
+    Human->>Entra: Exchange code for token
+    Entra-->>Human: Access token (scp: mcp.tools.invoke)
+    Human->>Gw: Retry, Authorization: Bearer <token>
+    Gw->>Gw: validate-azure-ad-token
+    Gw->>MCP: Forward (IP-restricted ingress)
+    MCP-->>Human: Tool result
+    end
+
+    rect rgb(255, 245, 235)
+    note over Agent,MCP: Automated — Client Credentials
+    Agent->>Entra: POST /token (client_credentials + secret)
+    Entra-->>Agent: Access token (roles: Tools.Invoke.All)
+    Agent->>Gw: Call, Authorization: Bearer <token>
+    Gw->>Gw: validate-azure-ad-token
+    Gw->>MCP: Forward (IP-restricted ingress)
+    MCP-->>Agent: Tool result
+    end
+```
+
+## System landscape
+
+```mermaid
+flowchart LR
+    Human["Person\n(Claude Desktop / VS Code)"]
+    Agent["Automated agent"]
+    Entra["Microsoft Entra ID\nmcp-client-interactive\nmcp-client-agent\nmcp-server (resource)"]
+
+    subgraph GW["AI Gateway — Azure API Management"]
+        PRM[".well-known/\noauth-protected-resource\n(anonymous)"]
+        Policy["validate-azure-ad-token\naudience + client-id allowlist"]
+    end
+
+    subgraph CA["Azure Container Apps"]
+        MCP["MCP server\ningress restricted to\nGateway outbound IP only"]
+    end
+
+    Human -- "1. unauthenticated / PKCE token" --> GW
+    Agent -- "1. client-credentials token" --> GW
+    Human -. "browser redirect" .-> Entra
+    Agent -. "client_credentials" .-> Entra
+    GW --> PRM
+    GW --> Policy
+    Policy -- "2. forwarded, IP-restricted" --> MCP
+```
+
 ## Why this over the alternatives
 
 | Option | Why not chosen |
