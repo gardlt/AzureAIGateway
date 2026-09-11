@@ -58,3 +58,17 @@ output "llm_gateway_path" {
 output "a2a_gateway_path" {
   value = module.ai_gateway.a2a_gateway_path
 }
+
+output "self_hosted_agent_app_id_uri" {
+  description = "audience Foundry's outbound A2A connection (--audience) must request tokens for — doc 9 §9.4."
+  value       = module.agent.self_hosted_agent_app_id_uri
+}
+
+output "self_hosted_agent_fqdn" {
+  value = module.agent.self_hosted_agent_fqdn
+}
+
+output "self_hosted_agent_acr_login_server" {
+  description = "Build/push with: az acr build --registry <this> --image self-hosted-a2a-agent:latest ../self-hosted-agent"
+  value       = module.agent.self_hosted_agent_acr_login_server
+}

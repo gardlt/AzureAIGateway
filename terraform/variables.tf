@@ -186,3 +186,27 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+# ---- self-hosted A2A agent (doc 8, doc 9) ----
+
+variable "self_hosted_agent_container_image" {
+  description = "See modules/agent/variables.tf — bootstrap placeholder until self-hosted-agent/ is built and pushed."
+  type        = string
+  default     = "mcr.microsoft.com/k8se/quickstart:latest"
+}
+
+variable "self_hosted_agent_target_port" {
+  type    = number
+  default = 8080
+}
+
+variable "self_hosted_agent_aoai_endpoint" {
+  description = "Azure OpenAI endpoint for the self-hosted agent's chat client. Blank until an endpoint/auth path is chosen (see modules/agent/variables.tf aoai_endpoint)."
+  type        = string
+  default     = ""
+}
+
+variable "self_hosted_agent_aoai_deployment_name" {
+  type    = string
+  default = ""
+}

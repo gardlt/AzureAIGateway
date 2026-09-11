@@ -37,7 +37,18 @@ module "ai_gateway" {
 module "agent" {
   source = "./modules/agent"
 
-  foundry_agent_client_ids = var.foundry_agent_client_ids
+  resource_group_name        = module.ai_gateway.resource_group_name
+  location                   = module.ai_gateway.location
+  environment                = var.environment
+  tags                       = var.tags
+  tenant_id                  = module.ai_gateway.tenant_id
+  log_analytics_workspace_id = module.ai_gateway.log_analytics_workspace_id
+
+  foundry_agent_client_ids          = var.foundry_agent_client_ids
+  self_hosted_agent_container_image = var.self_hosted_agent_container_image
+  self_hosted_agent_target_port     = var.self_hosted_agent_target_port
+  aoai_endpoint                     = var.self_hosted_agent_aoai_endpoint
+  aoai_deployment_name              = var.self_hosted_agent_aoai_deployment_name
 }
 
 module "mcp" {

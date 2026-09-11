@@ -1,0 +1,7 @@
+agent-framework>=1.0.0b1
+agent-framework-a2a>=1.0.0b1
+a2a-sdk>=0.2.0
+azure-identity>=1.19.0
+PyJWT[crypto]>=2.9.0
+uvicorn>=0.30.0
+starlette>=0.38.0
