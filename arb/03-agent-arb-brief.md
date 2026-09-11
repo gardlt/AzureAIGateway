@@ -4,7 +4,7 @@
 1. Keep Foundry's control plane strictly in the *inbound* path for any agent it fronts; every outbound tool call bypasses Foundry and goes straight through the gateway on the agent's own credential.
 2. Adopt Microsoft Entra Agent ID (blueprint + per-agent instance identity, no client secret) as the standing pattern for new agent identities, replacing the bare app-registration-plus-secret pattern (`mcp-client-agent`) used today.
 
-Full detail: [../04-foundry-agent-mcp-tool.md](../04-foundry-agent-mcp-tool.md), [../07-agent-identities.md](../07-agent-identities.md) (includes a live worked example on this stack, §7.7), [../08-self-hosted-agent-identities.md](../08-self-hosted-agent-identities.md) (same pattern for agents not on Foundry Agent Service — Container Apps / AKS).
+Full detail: [../04-foundry-agent-mcp-tool.md](../04-foundry-agent-mcp-tool.md), [../07-agent-identities.md](../07-agent-identities.md) (includes a live worked example on this stack, §7.7), [../08-self-hosted-agent-identities.md](../08-self-hosted-agent-identities.md) (same pattern for agents not on Foundry Agent Service — Container Apps / AKS), [../09-agent-to-agent-a2a.md](../09-agent-to-agent-a2a.md) (self-hosting an A2A server, and the same agent identities authenticating *outbound* A2A calls to a remote agent).
 
 ## Context
 
