@@ -187,6 +187,21 @@ Add `interactive-client-id`, `agent-client-id`, and `resource-app-id` Named Valu
 
 (That header check is illustrative only — for real claim inspection, parse the JWT with `context.Request.Headers.GetValueOrDefault("Authorization")` piped through `Jwt.Parse` or use `validate-jwt`'s claim extraction instead of string matching.)
 
+### Rate-limit tool invocations
+
+[Microsoft's MCP best-practices guide](https://github.com/microsoft/mcp-for-beginners/blob/main/08-BestPractices/README.md) calls out throttling explicitly — an agent with a bug (or a compromised one) can hammer `tools/call` in a tight loop far faster than a human ever would. Add `rate-limit-by-key` right after `validate-azure-ad-token`, keyed on the token's `sub` claim rather than the shared `client_id`, so limiting one caller doesn't stall every agent sharing `mcp-client-agent`:
+
+```xml
+<validate-azure-ad-token ... output-token-variable-name="jwt">
+    ...
+</validate-azure-ad-token>
+<rate-limit-by-key calls="60" renewal-period="60"
+    counter-key="@(((Jwt)context.Variables["jwt"]).Claims.GetValueOrDefault("sub", new[] { "anon" })[0])"
+    remaining-calls-variable-name="remainingCalls" />
+```
+
+`output-token-variable-name` on `validate-azure-ad-token` is what makes the parsed `Jwt` object available as `context.Variables["jwt"]` — no second parse needed. Tune `calls`/`renewal-period` per expected legitimate call volume; 60/min is a starting point, not a universal constant.
+
 ### Forward the token to the container app (if your MCP server also validates it)
 
 Authorization headers are forwarded to the backend by default. If you added defense-in-depth validation in the container app (§2.3), no extra policy is needed. If you stripped or overrode the header anywhere upstream, restore it explicitly:
@@ -266,6 +281,38 @@ Fix by adding a small anonymous "OAuth facade" API mounted at the APIM service r
 > **Second gotcha, confirmed by live testing:** VS Code's manual-client-registration flow (the prompt in §2.7) omits the `scope` parameter entirely from both the `/authorize` request and the `/token` POST body. Entra's v2.0 token endpoint rejects a scope-less request with `AADSTS900144: The request body must contain the following parameter: 'scope'`. The facade's `/authorize` and `/token` operations should inject a default scope (`$APP_ID/.default offline_access openid profile`) whenever the incoming request doesn't already include one — do this with a `<set-header>`/`<set-body>` policy expression rather than assuming the client will supply it.
 
 This facade is optional — only needed if your MCP client falls back to resource-origin `/authorize`/`/token` guessing the way VS Code does. Claude and other clients that complete proper PRM + OIDC discovery don't need it.
+
+## 2.9 Hardening real tools: input validation, error sanitization, outbound calls
+
+§2.1–2.8 secure the *path to* the MCP server — token validation, PRM discovery, rate limiting, network isolation. None of that protects you from a badly written *tool*. The demo server in this repo (`mcp-server/main.go`) only implements `echo` and `time`, both harmless by construction, so it skips everything below — do not copy that omission into a real tool. Per [Microsoft's MCP best-practices guide](https://github.com/microsoft/mcp-for-beginners/blob/main/08-BestPractices/README.md):
+
+**Validate every tool argument, not just its JSON shape.** `tools/call` params arrive as arbitrary client-supplied JSON — treat them like any other untrusted input:
+- Enforce the tool's declared `inputSchema` server-side (type, `required`, `enum`, `minLength`/`maxLength`) — don't rely on the MCP client having enforced it first.
+- Never interpolate a tool argument into a SQL string or shell command — parameterize queries, and if a tool takes a file path, resolve and check it stays inside an allowed root before touching the filesystem (path traversal).
+- Reject unrecognized tool names and malformed `arguments` with a JSON-RPC error (`-32602`), the same as this repo's server already does for unknown tools/methods.
+
+**Don't leak internals in tool errors.** A stack trace, a raw exception message, or a backend connection string in an error response hands an attacker (or a confused agent) more than it needs. Return a short, actionable message (`"unknown tool: foo"`, `"invalid params"`) and log the detailed error server-side instead — this repo's `rpcError` shape already separates the two; keep doing that as tools grow more complex.
+
+**Gate sensitive tools by claim, not just by "is authenticated."** §2.6 already shows branching on `scp` vs `roles` to distinguish interactive from service-to-service callers — extend that pattern per-tool once a tool does something consequential (writes data, calls a paid API, touches PII): check the specific claim/role a *that tool* requires, not just that *some* valid token was presented.
+
+### Outbound calls: if a tool calls another API
+
+Nothing in this repo's tools calls a further downstream API today — `echo` and `time` are self-contained. The moment a real tool does (calls Microsoft Graph, a SaaS API, another internal service), don't hand it a static secret to hold. Use APIM's [credential manager](https://learn.microsoft.com/azure/api-management/credentials-overview) to inject that outbound token at the gateway instead of inside the MCP server process:
+
+```xml
+<!-- Inbound policy, before the request reaches the MCP server -->
+<get-authorization-context
+    provider-id="your-credential-provider-id"
+    authorization-id="auth-01"
+    context-variable-name="auth-context"
+    identity-type="managed"
+    ignore-error="false" />
+<set-header name="X-Downstream-Authorization" exists-action="override">
+    <value>@("Bearer " + ((Authorization)context.Variables.GetValueOrDefault("auth-context"))?.AccessToken)</value>
+</set-header>
+```
+
+The MCP server reads `X-Downstream-Authorization` (not `Authorization`, which stays the caller's own token per §2.6's forwarding rule) and uses it for its own outbound call — the token for the downstream API never has to be minted, stored, or refreshed by MCP server code. See [Configure credential manager](https://learn.microsoft.com/azure/api-management/credentials-how-to-github) for the provider-registration steps (Step 1–4 in the Azure APIM MCP security guide: register the app with the identity provider, create a credential provider, configure the connection, then reference it from policy as above).
 
 ## Troubleshooting
 

@@ -183,7 +183,7 @@ resource "azurerm_api_management_api_policy" "mcp_server" {
 <policies>
   <inbound>
     <base />
-    <validate-azure-ad-token tenant-id="{{tenant-id}}" header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid.">
+    <validate-azure-ad-token tenant-id="{{tenant-id}}" header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid." output-token-variable-name="jwt">
       <client-application-ids>
         <application-id>{{interactive-client-id}}</application-id>
         <application-id>{{agent-client-id}}</application-id>
@@ -195,6 +195,15 @@ resource "azurerm_api_management_api_policy" "mcp_server" {
         <audience>{{resource-app-id}}</audience>
       </audiences>
     </validate-azure-ad-token>
+    <!-- Per-caller rate limit: MCP best practices (github.com/microsoft/mcp-for-beginners,
+         08-BestPractices) call for throttling tool invocations to prevent abuse/runaway
+         agent loops. Keyed on the validated token's sub claim (unique per human sign-in
+         and, for client-credentials tokens, per calling app), never on the shared
+         client_id, so one noisy caller can't starve others sharing mcp-client-agent /
+         foundry_agent_client_ids. -->
+    <rate-limit-by-key calls="60" renewal-period="60"
+      counter-key="@(((Jwt)context.Variables["jwt"]).Claims.GetValueOrDefault("sub", new[] { "anon" })[0])"
+      remaining-calls-variable-name="remainingCalls" />
   </inbound>
   <backend>
     <base />

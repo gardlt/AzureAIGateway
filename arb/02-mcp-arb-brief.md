@@ -2,7 +2,7 @@
 
 **Ask:** approve running MCP servers as network-isolated Azure Container Apps reachable only through the AI Gateway, secured by one Entra ID resource app validated by one APIM policy, serving both interactive (human) and automated (agent) callers through two different OAuth2 flows.
 
-Full detail: [../02-mcp-remote-server.md](../02-mcp-remote-server.md), [../03-entra-id-oauth2.md](../03-entra-id-oauth2.md).
+Full detail: [../02-mcp-remote-server.md](../02-mcp-remote-server.md), [../03-entra-id-oauth2.md](../03-entra-id-oauth2.md). Checked against [Microsoft's MCP best-practices guide](https://github.com/microsoft/mcp-for-beginners/blob/main/08-BestPractices/README.md) and the [Azure APIM MCP security guide](https://learn.microsoft.com/en-us/azure/api-management/secure-mcp-servers) — see doc 02 §2.9 for the gap-closing detail.
 
 ## Context
 
@@ -104,6 +104,9 @@ flowchart LR
 | `mcp-client-agent` uses a long-lived client secret shared across every automated agent | Tracked as a separate, scoped hardening effort — see the Agent brief. |
 | Client-application-ids allowlist must be kept current as new clients are added | Managed as Terraform variables, reviewed like code, not a manual portal edit. |
 | v1 vs v2 token / Application ID URI mismatches are an easy source of validation failures | Documented explicitly with the exact resource-URL matching rules — an operational footgun, not a design risk. |
+| No throttling on tool invocations — a buggy or compromised agent can hammer `tools/call` in a loop | Closed: `rate-limit-by-key` added to the MCP API policy, keyed on the token's `sub` claim so limiting one caller doesn't stall others sharing an app registration (doc 02 §2.6). |
+| Real tools (beyond the current demo `echo`/`time`) need input validation, error sanitization, and per-tool claim checks that the demo skips by design | Documented as the standard for any new tool, not yet needed by the demo server (doc 02 §2.9). Track as a gate on the first non-toy tool shipped. |
+| A tool calling a further downstream API would need its own credential — easy to default to hardcoding a secret in the MCP server | Documented pattern: APIM credential manager injects the outbound token at the gateway instead (doc 02 §2.9). Not wired yet — no tool needs it today. |
 
 ## Decision requested
 
