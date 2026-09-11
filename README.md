@@ -85,5 +85,15 @@ Entra ID app registrations must exist before you can finish wiring APIM to the M
 4. [04-foundry-agent-mcp-tool.md](04-foundry-agent-mcp-tool.md) — optional: register a self-hosted Foundry agent runner and have it call the MCP server as a tool, reusing the service-to-service app from step 2.
 5. [05-llm-gateway-budgets-rate-limits.md](05-llm-gateway-budgets-rate-limits.md) — optional, independent of steps 2–4: expose an LLM model through the same APIM instance from step 1, with per-consumer token budgets, rate limits, and observability.
 6. [06-agent-gateway-capabilities.md](06-agent-gateway-capabilities.md) — optional: capability inventory for agent traffic specifically, plus importing and securing an Agent2Agent (A2A) API through the same instance. Covers what's first-class (MCP, A2A) vs. not (ACP, ANP, others) as of this writing.
+7. [07-agent-identities.md](07-agent-identities.md) — optional, hardening pass on step 2's `mcp-client-agent`: replaces the plain app registration with a Microsoft Entra Agent ID blueprint + instance, per Microsoft's best-practice pattern.
+8. [08-self-hosted-agent-identities.md](08-self-hosted-agent-identities.md) — optional, alternative to step 7 for teams not using Foundry Agent Service: same no-secret Entra Agent ID pattern, federated to a self-hosted agent's own platform identity on Azure Container Apps or AKS.
 
 Each doc calls out the cross-references explicitly so you can also jump straight to whichever layer you're working on.
+
+## Architecture Review Board briefs
+
+Distilled, decision-first versions of the above for a review board — no setup steps, just risk/decision/trade-offs/ask, organized around the three major topics rather than the step-by-step doc numbering:
+
+1. [arb/01-ai-gateway-arb-brief.md](arb/01-ai-gateway-arb-brief.md) — the AI Gateway itself (docs 1, 5, 6): one APIM instance for MCP/LLM/A2A traffic, Products as the budget boundary, and the two-protocol (MCP/A2A) support ceiling.
+2. [arb/02-mcp-arb-brief.md](arb/02-mcp-arb-brief.md) — MCP (docs 2, 3): network-isolated Container Apps behind the gateway, one resource app validated by one policy serving both interactive and automated callers.
+3. [arb/03-agent-arb-brief.md](arb/03-agent-arb-brief.md) — Agent (docs 4, 7, 8): Foundry stays inbound-only, Entra Agent ID replaces the shared-secret pattern for agent identity — Foundry-managed, Container Apps, or AKS — backed by a live proof of concept on this stack.

@@ -1,19 +1,21 @@
 variable "resource_group_name" {
   description = "Resource group for the whole gateway stack."
   type        = string
-  default     = "rg-ai-gateway"
 }
 
 variable "location" {
-  description = "Azure region. Central US is the standing default for this repo."
+  description = "Azure region."
   type        = string
-  default     = "centralus"
 }
 
 variable "environment" {
   description = "Short env tag used in resource names (dev/stage/prod)."
   type        = string
-  default     = "dev"
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
 }
 
 # ---- APIM (doc 1) ----
@@ -46,58 +48,6 @@ variable "apim_monthly_budget_usd" {
 
 variable "apim_budget_alert_emails" {
   description = "Emails notified when the APIM budget threshold fires. Defaults to apim_publisher_email if left empty."
-  type        = list(string)
-  default     = []
-}
-
-# ---- Entra ID apps (doc 3) ----
-
-variable "mcp_url" {
-  description = "Canonical MCP server URL through APIM, e.g. https://<apim-name>.azure-api.net/mcp-server/mcp. Must match the APIM MCP API's resulting URL exactly (doc 3 §prereqs)."
-  type        = string
-}
-
-variable "mcp_base_path" {
-  description = "APIM route/base path for the MCP server API (doc 2 §2.4)."
-  type        = string
-  default     = "mcp-server"
-}
-
-variable "interactive_client_redirect_uris" {
-  description = "Loopback/custom-scheme redirect URIs for the interactive (Claude/VS Code) public client (doc 3 §3.2). VS Code typically needs http://127.0.0.1:<port>/; add Claude's documented callback too."
-  type        = list(string)
-  default     = ["http://127.0.0.1:33418/", "https://vscode.dev/redirect"]
-}
-
-# ---- MCP server container app (doc 2) ----
-
-variable "mcp_container_image" {
-  description = "Container image implementing MCP streamable HTTP transport at /mcp and health at /healthz."
-  type        = string
-}
-
-variable "mcp_target_port" {
-  type    = number
-  default = 3000
-}
-
-variable "mcp_cors_allowed_origins" {
-  description = "Trusted browser origins for MCP CORS (doc 2 §2.2). Only needed for browser-based MCP clients (VS Code for the Web)."
-  type        = list(string)
-  default     = ["https://vscode.dev", "https://github.dev"]
-}
-
-# ---- Agent identities (doc 7) ----
-
-variable "foundry_agent_client_ids" {
-  description = <<-EOT
-    client_id (instance_identity.client_id) of each Foundry-managed agent
-    identity (doc 7) allowed to call the MCP server through APIM, in
-    addition to mcp-client-interactive and mcp-client-agent. Each Foundry
-    agent gets its own auto-provisioned agent identity/client_id — add it
-    here (not to mcp_client_agent) so validate-azure-ad-token's
-    client-application-ids allowlist accepts its tokens.
-  EOT
   type        = list(string)
   default     = []
 }
@@ -180,9 +130,4 @@ variable "a2a_rate_limit_calls" {
 variable "a2a_rate_limit_period_seconds" {
   type    = number
   default = 60
-}
-
-variable "tags" {
-  type    = map(string)
-  default = {}
 }
