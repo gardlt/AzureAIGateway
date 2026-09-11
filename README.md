@@ -96,4 +96,4 @@ Distilled, decision-first versions of the above for a review board — no setup 
 
 1. [arb/01-ai-gateway-arb-brief.md](arb/01-ai-gateway-arb-brief.md) — the AI Gateway itself (docs 1, 5, 6): one APIM instance for MCP/LLM/A2A traffic, Products as the budget boundary, and the two-protocol (MCP/A2A) support ceiling.
 2. [arb/02-mcp-arb-brief.md](arb/02-mcp-arb-brief.md) — MCP (docs 2, 3): network-isolated Container Apps behind the gateway, one resource app validated by one policy serving both interactive and automated callers.
-3. [arb/03-agent-arb-brief.md](arb/03-agent-arb-brief.md) — Agent (docs 4, 7): Foundry stays inbound-only, Entra Agent ID replaces the shared-secret pattern for agent identity, backed by a live proof of concept on this stack.
+3. [arb/03-agent-arb-brief.md](arb/03-agent-arb-brief.md) — Agent (docs 4, 7, 8): Foundry stays inbound-only, Entra Agent ID replaces the shared-secret pattern for agent identity — Foundry-managed, Container Apps, or AKS — backed by a live proof of concept on this stack.

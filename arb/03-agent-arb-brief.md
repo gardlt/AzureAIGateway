@@ -4,7 +4,7 @@
 1. Keep Foundry's control plane strictly in the *inbound* path for any agent it fronts; every outbound tool call bypasses Foundry and goes straight through the gateway on the agent's own credential.
 2. Adopt Microsoft Entra Agent ID (blueprint + per-agent instance identity, no client secret) as the standing pattern for new agent identities, replacing the bare app-registration-plus-secret pattern (`mcp-client-agent`) used today.
 
-Full detail: [../04-foundry-agent-mcp-tool.md](../04-foundry-agent-mcp-tool.md), [../07-agent-identities.md](../07-agent-identities.md) (includes a live worked example on this stack, §7.7).
+Full detail: [../04-foundry-agent-mcp-tool.md](../04-foundry-agent-mcp-tool.md), [../07-agent-identities.md](../07-agent-identities.md) (includes a live worked example on this stack, §7.7), [../08-self-hosted-agent-identities.md](../08-self-hosted-agent-identities.md) (same pattern for agents not on Foundry Agent Service — Container Apps / AKS).
 
 ## Context
 
@@ -28,7 +28,15 @@ The tool call itself is identical to any other automated-agent call through the 
 | Revocation | Rotate/delete shared secret — breaks every agent at once | Disable one agent's instance identity independently |
 | Status | GA | **Preview** |
 
-For agents built on Azure AI Foundry Agent Service, this identity is auto-provisioned the moment the agent is published (a `ManagedAgentIdentityBlueprint`) — no manual Graph API work. For self-hosted runners not using Foundry Agent Service, doc 07 §7.4b proposes the Auth SDK sidecar as the lower-effort alternative to hand-rolling the Graph `agentIdentityBlueprint` calls directly.
+For agents built on Azure AI Foundry Agent Service, this identity is auto-provisioned the moment the agent is published (a `ManagedAgentIdentityBlueprint`) — no manual Graph API work. For self-hosted runners not using Foundry Agent Service, doc 07 §7.4b proposes the Auth SDK sidecar as the lower-effort alternative to hand-rolling the Graph `agentIdentityBlueprint` calls directly — and doc 08 gives the concrete recipe on the two self-hosted compute platforms this org actually runs:
+
+| Platform | What the instance identity federates to | Credential type |
+|---|---|---|
+| Foundry Agent Service | Nothing needed — Foundry holds it | N/A (platform-managed) |
+| Azure Container Apps (self-hosted) | The container app's own managed identity | `SignedAssertionFromManagedIdentity` |
+| AKS (self-hosted) | Projected Kubernetes service-account token via cluster OIDC issuer | `SignedAssertionFilePath` |
+
+No client secret in any of the three rows.
 
 ### Proven, not just proposed
 
@@ -116,9 +124,10 @@ flowchart TB
 | Entra Agent ID is a preview capability — API surface, portal UX, and Graph schema can change before GA | Migration is additive and reversible: `mcp-client-agent` isn't deleted, it remains the fallback until GA. No production traffic is cut over before then. |
 | New per-agent allowlist entry required for every Foundry agent, or it 401s at the gateway | Already codified as a Terraform variable, reviewed the same as any other IaC change. |
 | ARM/data-plane schema mismatch for Foundry project connections | Documented standing rule (above); prefer the data-plane/`azd ai connection` surface for connection mutations once interactive auth is available in the target environment. |
-| Self-hosted runner path has more manual steps than the Foundry-managed path | Auth SDK sidecar (doc 07 §7.4b) is the recommended lower-effort alternative; tracked as the next piece of this migration. |
+| Self-hosted runner path has more manual steps than the Foundry-managed path | Auth SDK sidecar (doc 07 §7.4b) is the recommended lower-effort alternative; doc 08 has the concrete Container Apps/AKS recipes. |
+| AKS credential type (`SignedAssertionFilePath`) differs from Container Apps/VM managed identity (`SignedAssertionFromManagedIdentity`) — easy to copy the wrong recipe between platforms | Documented explicitly in doc 08 §8.7 as a named gotcha. |
 | Third-party agent platforms (e.g. AWS Bedrock) aren't covered by either app-registration secrets or Foundry-managed identities | Doc 07 §7.4c covers workload identity federation for that case — no secret crosses the cloud boundary either. |
 
 ## Decision requested
 
-Approve both: (1) Foundry-inbound-only as the standing rule for any Foundry-fronted agent, and (2) Entra Agent ID as the default for new agent onboarding — Foundry-managed agents get it automatically, self-hosted runners migrate via the Auth SDK sidecar — with `mcp-client-agent` retained only for existing integrations until Agent ID reaches GA and the self-hosted migration path is complete.
+Approve both: (1) Foundry-inbound-only as the standing rule for any Foundry-fronted agent, and (2) Entra Agent ID as the default for new agent onboarding — Foundry-managed agents get it automatically, self-hosted runners on Container Apps or AKS migrate via the Auth SDK sidecar (doc 08) — with `mcp-client-agent` retained only for existing integrations until Agent ID reaches GA and the self-hosted migration path is complete.
