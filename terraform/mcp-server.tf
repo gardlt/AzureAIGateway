@@ -187,6 +187,9 @@ resource "azurerm_api_management_api_policy" "mcp_server" {
       <client-application-ids>
         <application-id>{{interactive-client-id}}</application-id>
         <application-id>{{agent-client-id}}</application-id>
+%{ for id in var.foundry_agent_client_ids ~}
+        <application-id>${id}</application-id>
+%{ endfor ~}
       </client-application-ids>
       <audiences>
         <audience>{{resource-app-id}}</audience>
